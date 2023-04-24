@@ -1,25 +1,48 @@
 from flask import Blueprint, render_template, jsonify, request, send_from_directory, flash, redirect, url_for
 from flask_jwt_extended import jwt_required, current_user as jwt_current_user
 from flask_login import login_required, login_user, current_user, logout_user
+#import requests
+
+
+from App.controllers.user import User
+
+
+from App.models.user import User
+from App.models.Exercise import Exercise
+from App.models.userExercise import UserExercise
+from App.database import db
+
+from flask_login import LoginManager
 
 from.index import index_views
 
 from App.controllers import (
     create_user,
     jwt_authenticate,
-    login 
+    login,
+
+    get_exercise_by_type,
+    get_api_data,
+    get_api_image,
+    create_Exercise
+
 )
 
 auth_views = Blueprint('auth_views', __name__, template_folder='../templates')
+
+#API_URL = 'https://wger.de/api/v2/exercise/?language=2'
+#API_KEY = 'db41e887abdeee70f768105f746b93afa2a1e856'
+
+#API_IMAGE = 'https://wger.de/api/v2/exerciseimage/'
 
 '''
 Page/Action Routes
 '''
 
-@auth_views.route('/users', methods=['GET'])
-def get_user_page():
-    users = get_all_users()
-    return render_template('users.html', users=users)
+# @auth_views.route('/users', methods=['GET'])
+# def get_user_page():
+    #users = get_all_users()
+    #return render_template('users.html', users=users)
 
 
 @auth_views.route('/identify', methods=['GET'])
@@ -28,20 +51,83 @@ def identify_page():
     return jsonify({'message': f"username: {current_user.username}, id : {current_user.id}"})
 
 
-@auth_views.route('/login', methods=['POST'])
+
+
+# Page routes
+
+
+@auth_views.route ("/", methods=['GET'])
+def login():
+    return render_template("login.html")
+
+@auth_views.route("/signup", methods=['GET'])
+def signup_page():
+  return render_template('signup.html')
+
+@auth_views.route("/profile", methods=['GET'])
+def profile_page():
+    return render_template('profile.html')
+
+# @auth_views.route("/app", methods=['GET'])
+# @auth_views.route("/app/<int:exercise_id>", methods=['GET'])
+# @login_required
+# def home_page(exercise_id):
+#     exercise = Exercise.query.get(exercise_id)
+#     user_Exercises = UserExercise.query.filter_by(exercise_id=current_Exercise.id).all()
+#     exercises = Exercise.query.all()
+
+#     return render_template("equipment.html", exercise=exercise, user_Exercises=user_Exercises, exercises=exercises)
+
+#Form Action routes
+
+@auth_views.route("/login", methods=['POST'])
 def login_action():
     data = request.form
-    user = login(data['username'], data['password'])
-    if user:
+
+    user = User.query.filter_by(username=data['username']).first()
+    if user and user.check_password(data['password']):
+        flash('Logged in successfully')
         login_user(user)
-        return 'user logged in!'
-    return 'bad username or password given', 401
+        return redirect('/equipment')
+    else:
+        flash('Invalid username or password')
+    return redirect('/')
+
+@auth_views.route("/signup", methods=['POST'])
+def signup_action():
+    data = request.form
+    new_user = User(username=data['username'], password=data['password'])
+    try:
+        db.session.add(new_user)
+        db.session.commit()
+        login_user(new_user)
+        flash('Account Created')
+        return redirect('/equipment')
+    except Exception:
+        db.session.rollback()
+    return redirect('/signup')
 
 @auth_views.route('/logout', methods=['GET'])
 def logout_action():
-    data = request.form
-    user = login(data['username'], data['password'])
-    return 'logged out!'
+    logout_user()
+    return redirect('/')
+
+
+# @auth_views.route('/equipment', methods=['GET'])
+# def equipment_action():
+
+#     data = get_api_data(API_URL, API_KEY)
+
+#     for item in data['results']:
+#         name = item['name']
+#         uuid = item['uuid']
+#         create_Exercise(name=name, uuid=uuid)
+
+
+#     images = get_api_image(uuid)
+
+#     return render_template("equipment.html", data=data['results'], images=images['results'])
+
 
 '''
 API Routes
@@ -49,7 +135,7 @@ API Routes
 
 @auth_views.route('/api/users', methods=['GET'])
 def get_users_action():
-    users = get_all_users_json()
+    users = get_api_data()
     return jsonify(users)
 
 @auth_views.route('/api/users', methods=['POST'])
