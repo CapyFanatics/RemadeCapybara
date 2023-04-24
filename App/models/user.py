@@ -1,6 +1,8 @@
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import UserMixin
 from App.database import db
+from .Exercise import Exercise
+from .userExercise import UserExercise
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
@@ -10,6 +12,65 @@ class User(db.Model, UserMixin):
     def __init__(self, username, password):
         self.username = username
         self.set_password(password)
+
+    def add_exercise(self, exercise_id, name, reps, sets, weight):
+        exercise = Exercise.query.get(exercise_id)
+
+        if exercise:
+            try:
+                user_exercise = UserExercise(
+                    user_id=self.id,
+                    exercise_id=exercise_id,
+                    name=name,
+                    reps=reps,
+                    sets=sets,
+                    weight=weight
+                )
+                db.session.add(user_exercise)
+                db.session.commit()
+                return user_exercise
+            except Exception as e:
+                db.session.rollback()
+                print(e)
+                return None
+
+        return None
+
+
+    def delete_exercise(self, exercise_id):
+        user_exercise = UserExercise.query.filter_by(
+            user_id=self.id, exercise_id=exercise_id
+        ).first()
+
+        if user_exercise:
+            db.session.delete(user_exercise)
+            db.session.commit()
+            return True
+
+        return None
+
+
+    def edit_exercise(self, exercise_id, name, reps, sets, weight):
+        user_exercise = UserExercise.query.filter_by(
+            user_id=self.id, exercise_id=exercise_id
+        ).first()
+
+        if user_exercise:
+            user_exercise.name = name
+            user_exercise.reps = reps
+            user_exercise.sets = sets
+            user_exercise.weight = weight
+
+            db.session.add(user_exercise)
+            db.session.commit()
+            return user_exercise
+
+        return None
+
+
+    def change_password(self, new_password):
+        self.password = new_password
+        self.save()
 
     def get_json(self):
         return{
@@ -24,4 +85,3 @@ class User(db.Model, UserMixin):
     def check_password(self, password):
         """Check hashed password."""
         return check_password_hash(self.password, password)
-
